@@ -14,7 +14,10 @@ kumamoto-henno-map プロジェクトのバージョンアップ時に必要な 
 alt_generator/output/
   {バージョン or PR-番号}/
     DDL/
-      Alt_{テーブル名}.SQL
+      TABLE/
+        Alt_{テーブル名}.SQL
+      VIEW/
+        Alt_{ビュー名}.SQL
     DML/
       Alt_{テーブル名}.SQL
 ```

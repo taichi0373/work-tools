@@ -457,9 +457,10 @@ function New-DmlAltSql {
 # Git 差分取得
 # ============================================================
 
-$script:DDL_PATTERN = [regex]::new('(?i)config/database/DDL/TABLE/([A-Z0-9_]+)\.SQL')
-$script:DML_PATTERN = [regex]::new('(?i)config/database/DML/TABLE/([A-Z0-9_]+)\.SQL')
-$script:SEMVER_RE   = [regex]::new('^v(\d+)\.(\d+)\.(\d+)$')
+$script:DDL_PATTERN  = [regex]::new('(?i)config/database/DDL/TABLE/([A-Z0-9_]+)\.SQL')
+$script:DML_PATTERN  = [regex]::new('(?i)config/database/DML/TABLE/([A-Z0-9_]+)\.SQL')
+$script:VIEW_PATTERN = [regex]::new('(?i)config/database/DDL/VIEW/([A-Z0-9_]+)\.SQL')
+$script:SEMVER_RE    = [regex]::new('^v(\d+)\.(\d+)\.(\d+)$')
 
 function Get-SemverInt {
     param([string]$Tag)
@@ -531,12 +532,17 @@ function Get-VersionDiff {
         $status   = $parts[0].Trim()
         $filePath = $parts[1].Trim()
 
-        $ddlMatch = $script:DDL_PATTERN.Match($filePath)
-        $dmlMatch = $script:DML_PATTERN.Match($filePath)
-        if (-not $ddlMatch.Success -and -not $dmlMatch.Success) { continue }
+        $ddlMatch  = $script:DDL_PATTERN.Match($filePath)
+        $dmlMatch  = $script:DML_PATTERN.Match($filePath)
+        $viewMatch = $script:VIEW_PATTERN.Match($filePath)
+        if (-not $ddlMatch.Success -and -not $dmlMatch.Success -and -not $viewMatch.Success) { continue }
 
-        $tableName = if ($ddlMatch.Success) { $ddlMatch.Groups[1].Value.ToUpper() } else { $dmlMatch.Groups[1].Value.ToUpper() }
-        $sqlType   = if ($ddlMatch.Success) { "DDL" } else { "DML" }
+        $tableName = if ($ddlMatch.Success)  { $ddlMatch.Groups[1].Value.ToUpper()  }
+                     elseif ($dmlMatch.Success)  { $dmlMatch.Groups[1].Value.ToUpper()  }
+                     else                        { $viewMatch.Groups[1].Value.ToUpper() }
+        $sqlType   = if ($ddlMatch.Success)  { "DDL" }
+                     elseif ($dmlMatch.Success)  { "DML" }
+                     else                        { "VIEW" }
 
         $oldContent = if ($status -ne "A") { Get-GitFileContent -RepoPath $RepoPath -Ref $prevVersion -FilePath $filePath } else { $null }
         $newContent = if ($status -ne "D") { Get-GitFileContent -RepoPath $RepoPath -Ref $Version     -FilePath $filePath } else { $null }
@@ -599,12 +605,17 @@ function Get-PrDiff {
         $filePath = $file.filename
         $status   = $file.status  # "added", "modified", "removed", "renamed"
 
-        $ddlMatch = $script:DDL_PATTERN.Match($filePath)
-        $dmlMatch = $script:DML_PATTERN.Match($filePath)
-        if (-not $ddlMatch.Success -and -not $dmlMatch.Success) { continue }
+        $ddlMatch  = $script:DDL_PATTERN.Match($filePath)
+        $dmlMatch  = $script:DML_PATTERN.Match($filePath)
+        $viewMatch = $script:VIEW_PATTERN.Match($filePath)
+        if (-not $ddlMatch.Success -and -not $dmlMatch.Success -and -not $viewMatch.Success) { continue }
 
-        $tableName = if ($ddlMatch.Success) { $ddlMatch.Groups[1].Value.ToUpper() } else { $dmlMatch.Groups[1].Value.ToUpper() }
-        $sqlType   = if ($ddlMatch.Success) { "DDL" } else { "DML" }
+        $tableName = if ($ddlMatch.Success)      { $ddlMatch.Groups[1].Value.ToUpper()  }
+                     elseif ($dmlMatch.Success)  { $dmlMatch.Groups[1].Value.ToUpper()  }
+                     else                        { $viewMatch.Groups[1].Value.ToUpper() }
+        $sqlType   = if ($ddlMatch.Success)      { "DDL" }
+                     elseif ($dmlMatch.Success)  { "DML" }
+                     else                        { "VIEW" }
 
         $oldContent = if ($status -ne "added")   { Get-GitFileContent -RepoPath $RepoPath -Ref $baseSha -FilePath $filePath } else { $null }
         $newContent = if ($status -ne "removed") { Get-GitFileContent -RepoPath $RepoPath -Ref $headSha -FilePath $filePath } else { $null }
@@ -681,7 +692,20 @@ function Invoke-ProcessDiffFiles {
         $newDdlMap[$df.TableName] = $newDdl
 
         $sql = New-DdlAltSql -TableName $df.TableName -OldDdl $oldDdl -NewDdl $newDdl
-        Write-AltFile -OutputDir (Join-Path $basePath "DDL") -TableName $df.TableName -Sql $sql
+        Write-AltFile -OutputDir (Join-Path $basePath "DDL\TABLE") -TableName $df.TableName -Sql $sql
+    }
+
+    # ---- VIEW 差分処理 ----
+    foreach ($df in @($DiffFiles | Where-Object { $_.SqlType -eq "VIEW" })) {
+        if ($null -eq $df.NewContent) {
+            # VIEW削除の場合
+            $sql = "DROP VIEW IF EXISTS $($df.TableName);"
+        }
+        else {
+            # CREATE OR REPLACE VIEW をそのまま出力
+            $sql = $df.NewContent.Trim()
+        }
+        Write-AltFile -OutputDir (Join-Path $basePath "DDL\VIEW") -TableName $df.TableName -Sql $sql
     }
 
     # ---- DML 差分処理 ----
