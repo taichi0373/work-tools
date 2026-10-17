@@ -1,0 +1,7 @@
+{
+  "sourceSpreadsheetId": "課題管理シートのID",
+  "previousWeekSpreadsheetId": "共有の進捗管理シートのID",
+  "sourceSheetName": "課題管理シートのシート名",
+  "oauthClientSecretPath": "C:\\path\\to\\client_secret_xxx.json",
+  "targetPersons": ["担当者A", "担当者B"]
+}
