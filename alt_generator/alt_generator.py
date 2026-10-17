@@ -29,26 +29,47 @@ def _process_diff_files(
     repo = Path(repo_path)
     base = Path(output_base) / identifier
 
+    # DDL差分を先にビルドし、旧/新のDDLTableをテーブル名ごとに記録する
+    old_ddl_map: dict[str, object] = {}
+    new_ddl_map: dict[str, object] = {}
     for df in diff_files:
         if df.sql_type == "DDL":
             old_ddl = parse_ddl(df.old_content) if df.old_content else None
             new_ddl = parse_ddl(df.new_content) if df.new_content else None
+            old_ddl_map[df.table_name] = old_ddl
+            new_ddl_map[df.table_name] = new_ddl
             sql = generate_ddl_alt(df.table_name, old_ddl, new_ddl)
             _write_alt(base / "DDL", df.table_name, sql)
 
-        elif df.sql_type == "DML":
-            # DDLファイルからカラム情報と主キーを取得
-            ddl_path = repo / _DDL_TABLE_DIR / f"{df.table_name}.SQL"
-            if not ddl_path.exists():
-                print(f"[WARNING] DDLファイルが見つかりません: {ddl_path}")
+    for df in diff_files:
+        if df.sql_type == "DML":
+            # DDLがdiff内にある場合は旧/新DDLを使い分ける
+            # diff内にない場合はディスク上の現在のDDLを使用（変更なしのため同一）
+            disk_ddl_path = repo / _DDL_TABLE_DIR / f"{df.table_name}.SQL"
+            if not disk_ddl_path.exists():
+                print(f"[WARNING] DDLファイルが見つかりません: {disk_ddl_path}")
                 continue
-            ddl_table = parse_ddl(ddl_path.read_text(encoding="utf-8"))
-            columns = [c.name for c in ddl_table.columns]
-            pk_columns = ddl_table.primary_keys
+            disk_ddl = parse_ddl(disk_ddl_path.read_text(encoding="utf-8"))
 
-            old_records = parse_dml(df.old_content or "", columns, pk_columns)
-            new_records = parse_dml(df.new_content or "", columns, pk_columns)
-            sql = generate_dml_alt(df.table_name, old_records, new_records, pk_columns, columns)
+            old_ddl_table = old_ddl_map.get(df.table_name) or disk_ddl
+            new_ddl_table = new_ddl_map.get(df.table_name) or disk_ddl
+
+            old_columns = [c.name for c in old_ddl_table.columns]
+            new_columns = [c.name for c in new_ddl_table.columns]
+            pk_columns = new_ddl_table.primary_keys  # PKは新DDL基準
+
+            old_records = parse_dml(df.old_content or "", old_columns, pk_columns)
+            new_records = parse_dml(df.new_content or "", new_columns, pk_columns)
+
+            # DML比較は新DDLのカラム順で実施（共通カラムのみ）
+            all_columns = new_columns
+            # 旧レコードを新カラム構造に揃える（追加カラムはNULLで補完）
+            aligned_old: dict = {}
+            for pk_key, row in old_records.items():
+                aligned_row = {col: row.get(col, "NULL") for col in all_columns}
+                aligned_old[pk_key] = aligned_row
+
+            sql = generate_dml_alt(df.table_name, aligned_old, new_records, pk_columns, all_columns)
             if sql:
                 _write_alt(base / "DML", df.table_name, sql)
 
@@ -115,29 +136,37 @@ def main() -> None:
     # version サブコマンド
     version_parser = subparsers.add_parser("version", help="バージョン指定で差分生成")
     version_parser.add_argument("version", help="バージョンタグ (例: v1.1.5)")
+    version_parser.add_argument("--repo-path", default=None, help="対象リポジトリのパス")
+    version_parser.add_argument("--output-base", default=None, help="ALTファイル出力先")
 
     # pr サブコマンド
     pr_parser = subparsers.add_parser("pr", help="PR番号指定で差分生成")
     pr_parser.add_argument("pr_number", type=int, help="PR番号")
+    pr_parser.add_argument("--repo-path", default=None, help="対象リポジトリのパス")
+    pr_parser.add_argument("--output-base", default=None, help="ALTファイル出力先")
 
     args = parser.parse_args()
 
+    # サブコマンド側の --repo-path が優先、なければグローバル値
+    repo_path = getattr(args, "repo_path", None) or args.__dict__.get("repo_path") or "."
+    output_base = getattr(args, "output_base", None)
+
     if args.command == "version":
         run_version(
-            repo_path=args.repo_path,
+            repo_path=repo_path,
             version=args.version,
-            output_base=args.output_base,
+            output_base=output_base,
         )
     elif args.command == "pr":
         github_token = os.environ.get("GITHUB_TOKEN", "")
         if not github_token:
             parser.error("GITHUB_TOKEN 環境変数が設定されていません (.env ファイルを確認してください)")
         run_pr(
-            repo_path=args.repo_path,
+            repo_path=repo_path,
             pr_number=args.pr_number,
             github_token=github_token,
             github_repo=args.github_repo,
-            output_base=args.output_base,
+            output_base=output_base,
         )
 
 
