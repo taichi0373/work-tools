@@ -242,7 +242,8 @@ function ConvertTo-DmlRecords {
         $values    = Split-SqlValueTokens -ValuesStr $valuesStr
 
         if ($values.Count -ne $Columns.Count) {
-            throw "カラム数 $($Columns.Count) とVALUES数 $($values.Count) が一致しません: $($values -join ', ')"
+            Write-Warning "カラム数 $($Columns.Count) とVALUES数 $($values.Count) が一致しません（スキップ）: $($values -join ', ')"
+            continue
         }
 
         $row = @{}
@@ -616,7 +617,11 @@ function Get-PrDiff {
         })
     }
 
-    return @($diffedFiles.ToArray())
+    return @{
+        BaseSha   = $baseSha
+        HeadSha   = $headSha
+        DiffFiles = $diffedFiles.ToArray()
+    }
 }
 
 # ============================================================
@@ -755,13 +760,18 @@ $RepoPath = (Resolve-Path $RepoPath).Path
 
 if ($Command -eq "version") {
     if ([string]::IsNullOrEmpty($OutputBase)) {
-        $OutputBase = Join-Path $RepoPath "config\database\Alt"
+        $OutputBase = Join-Path $PSScriptRoot "output"
     }
 
     $result    = Get-VersionDiff -RepoPath $RepoPath -Version $Target
     $prevVer   = $result.PreviousVersion
     $diffFiles = @($result.DiffFiles)
     Write-Host "差分: $prevVer → $Target ($($diffFiles.Count) ファイル)"
+
+    if ($diffFiles.Count -eq 0) {
+        Write-Host "ALT対象の差分がありません。" -ForegroundColor Yellow
+        exit 0
+    }
 
     Invoke-ProcessDiffFiles `
         -DiffFiles    $diffFiles `
@@ -773,7 +783,7 @@ if ($Command -eq "version") {
 }
 elseif ($Command -eq "pr") {
     if ([string]::IsNullOrEmpty($OutputBase)) {
-        $OutputBase = Join-Path $RepoPath "config\database\Alt"
+        $OutputBase = Join-Path $PSScriptRoot "output"
     }
 
     $token = $GithubToken
@@ -786,13 +796,23 @@ elseif ($Command -eq "pr") {
     }
 
     $prNum      = [int]$Target
-    $diffFiles  = @(Get-PrDiff -RepoPath $RepoPath -PrNumber $prNum -GithubToken $token -GithubRepo $GithubRepo)
+    $prResult   = Get-PrDiff -RepoPath $RepoPath -PrNumber $prNum -GithubToken $token -GithubRepo $GithubRepo
+    $baseSha    = $prResult.BaseSha
+    $headSha    = $prResult.HeadSha
+    $diffFiles  = @($prResult.DiffFiles)
     $identifier = "PR-$prNum"
-    Write-Host "PR #${prNum}: $($diffFiles.Count) ファイルの差分"
+    Write-Host "PR #${prNum}: $($diffFiles.Count) ファイルの差分 (base: $($baseSha.Substring(0,7)), head: $($headSha.Substring(0,7)))"
+
+    if ($diffFiles.Count -eq 0) {
+        Write-Host "ALT対象の差分がありません。" -ForegroundColor Yellow
+        exit 0
+    }
 
     Invoke-ProcessDiffFiles `
-        -DiffFiles  $diffFiles `
-        -RepoPath   $RepoPath `
-        -OutputBase $OutputBase `
-        -Identifier $identifier
+        -DiffFiles   $diffFiles `
+        -RepoPath    $RepoPath `
+        -OutputBase  $OutputBase `
+        -Identifier  $identifier `
+        -PrevVersion $baseSha `
+        -Version     $headSha
 }

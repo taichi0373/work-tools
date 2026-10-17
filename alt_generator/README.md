@@ -2,18 +2,16 @@
 
 kumamoto-henno-map プロジェクトのバージョンアップ時に必要な **ALT SQL** を、Gitの差分から自動生成するPowerShellスクリプトです。
 
-**pip install 不要** — Windows 標準の PowerShell (5.1以上) で動作します。
-
 ---
 
 ## 概要
 
-Python版 (`alt_generator/`) と同等の機能を持ちますが、**外部ライブラリ不要**なため他メンバーへの配布が簡単です。
+**外部ライブラリ不要**なため、追加インストールなしで使用できます。
 
 ### 出力先
 
 ```
-config/database/Alt/
+alt_generator/output/
   {バージョン or PR-番号}/
     DDL/
       Alt_{テーブル名}.SQL
@@ -51,57 +49,54 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ## 使い方
 
-### バージョン指定モード
+`run_alt_generator.bat` をダブルクリックすると対話形式で実行できます。
 
-```powershell
-.\alt_generator.ps1 version <バージョン> -RepoPath <リポジトリのパス>
+### 手順
+
+**1. `run_alt_generator.bat` をダブルクリック**
+
+コンソール画面が開きます。
+
+**2. 実行モードを選択**
+
+```
+============================================
+ ALT SQL 自動生成ツール
+============================================
+
+実行モードを選んでください:
+  1. バージョン指定モード (例: v1.1.5)
+  2. PR番号モード          (例: 42)
+
+番号を入力してください (1 or 2):
 ```
 
-**例:**
+**3. バージョン or PR番号を入力**
 
-```powershell
-.\alt_generator.ps1 version v1.1.5 -RepoPath C:\Users\ta9ns\kumamoto-henno-map
+- モード `1` を選んだ場合 → バージョンタグを入力（例: `v1.1.5`）
+- モード `2` を選んだ場合 → PR番号を入力（例: `42`）
+
+**4. リポジトリのパスを入力**
+
+```
+リポジトリのパスを入力してください (Enter でデフォルト: C:\Users\ta9ns\kumamoto-henno-map):
 ```
 
-実行結果：
+Enter のみで既定パスを使用します。
+
+**5. 実行結果の確認**
 
 ```
 差分: v1.1.4 → v1.1.5 (2 ファイル)
-生成: C:\Users\ta9ns\kumamoto-henno-map\config\database\Alt\v1.1.5\DDL\Alt_BENEFIT.SQL
+生成: C:\Users\ta9ns\work_tools\alt_generator\output\v1.1.5\DDL\Alt_BENEFIT.SQL
+完了しました。
 ```
-
----
-
-### PRモード
-
-```powershell
-.\alt_generator.ps1 pr <PR番号> -RepoPath <リポジトリのパス>
-```
-
-**例:**
-
-```powershell
-.\alt_generator.ps1 pr 42 -RepoPath C:\Users\ta9ns\kumamoto-henno-map
-```
-
-> **注意:** GitHub Token（`.env` の `GITHUB_TOKEN`）が必要です。
-
----
-
-### オプション一覧
-
-| オプション | 説明 | デフォルト |
-|-----------|------|-----------|
-| `-RepoPath` | 対象リポジトリのパス | カレントディレクトリ |
-| `-OutputBase` | ALTファイルの出力先ベースパス | `{RepoPath}\config\database\Alt` |
-| `-GithubRepo` | GitHubリポジトリ名（`owner/repo`） | `taichi0373/kumamoto-henno-map` |
-| `-GithubToken` | GitHub Token（コマンドライン直接指定も可） | `.env` ファイルから読み込み |
 
 ---
 
 ## 生成SQLの仕様
 
-Python版と同一です。詳細は `alt_generator/README.md` を参照してください。
+詳細は設計書 `docs/superpowers/specs/2026-10-17-alt-sql-generator-design.md` を参照してください。
 
 ---
 
