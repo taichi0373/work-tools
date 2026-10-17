@@ -213,34 +213,35 @@ DROP TABLE BENEFIT_BK;
 
 ## 8. 実装方針
 
-**言語:** Python 3.9+
+**言語:** PowerShell 5.1+（Windows標準、pip install 不要）
 **配置先:** `C:\Users\ta9ns\work_tools\alt_generator\`
 
-**依存ライブラリ:**
-- `gitpython` — Gitリポジトリ操作（タグ間差分、ファイル取得）
-- `PyGitHub` (`PyGithub`) — GitHub API経由でPR情報取得
-- `python-dotenv` — GitHub Token等の環境変数管理
+**依存ライブラリ:** なし（外部ライブラリ不要）
+- Git操作 — `git.exe` コマンドを呼び出し（PATH に通っていること）
+- GitHub API — `Invoke-RestMethod`（PowerShell標準）
+- 環境変数 — `.env` ファイルを起動時に読み込み
 
 **CLIインターフェース:**
-```bash
+```powershell
 # 機能1: PRベース
-python alt_generator.py pr <PR番号> --repo-path /path/to/kumamoto-henno-map
+.\alt_generator.ps1 pr <PR番号> -RepoPath C:\path\to\kumamoto-henno-map
 
 # 機能2: バージョンベース
-python alt_generator.py version v1.1.5 --repo-path /path/to/kumamoto-henno-map
+.\alt_generator.ps1 version v1.1.5 -RepoPath C:\path\to\kumamoto-henno-map
+
+# ダブルクリック起動（対話型）
+run_alt_generator.bat
 ```
 
 **ディレクトリ構成:**
 ```
 work_tools/alt_generator/
-  alt_generator.py       # CLIエントリーポイント
-  sql_parser.py          # DDL/DMLパーサー
-  ddl_alt_generator.py   # DDL ALT生成
-  dml_alt_generator.py   # DML ALT生成
-  git_diff.py            # Git差分取得（バージョン間）
-  github_diff.py         # GitHub API差分取得（PR間）
-  requirements.txt
-  .env.example           # GITHUB_TOKEN=xxx
+  alt_generator.ps1        # メインスクリプト（全機能入り1ファイル）
+  run_alt_generator.bat    # ダブルクリック起動用ランチャー
+  run_alt_generator.ps1    # 対話型入力ランチャー
+  test_alt_ps.ps1          # 動作テスト
+  .env.example             # GITHUB_TOKEN=xxx
+  README.md
 ```
 
 ---
