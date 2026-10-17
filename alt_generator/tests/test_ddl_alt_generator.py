@@ -86,6 +86,32 @@ def test_not_null_column_added_warning():
     assert "ALTER TABLE BENEFIT MODIFY NEW_REQUIRED" in result
 
 
+def test_bk_copy_not_null_new_column_has_warning():
+    """BKコピー方式で新規NOT NULLカラムを追加した場合、INSERT SELECT にWARNINGコメント付きNULLが含まれる。"""
+    old = parse_ddl(BENEFIT_DDL)  # BENEFIT_ID, NAME
+    # NAME削除 + NEW_REQUIRED NOT NULL追加 → structural_change
+    new_with_required = """CREATE TABLE BENEFIT (
+  BENEFIT_ID   VARCHAR(20) NOT NULL,
+  NEW_REQUIRED VARCHAR(50) NOT NULL,
+  CONSTRAINT BENEFIT_PK PRIMARY KEY (BENEFIT_ID)
+);
+"""
+    new = parse_ddl(new_with_required)
+    result = generate_ddl_alt("BENEFIT", old, new)
+    assert "CREATE TABLE BENEFIT_BK AS SELECT * FROM BENEFIT" in result
+    assert "WARNING: NEW_REQUIRED is NOT NULL" in result
+    assert "NEW_REQUIRED" in result.split("INSERT INTO BENEFIT")[1]
+
+
+def test_no_change_returns_comment():
+    """構造変更なし（COMMENTのみ）の場合、BKコピーは生成されない。"""
+    old = parse_ddl(BENEFIT_DDL)
+    new = parse_ddl(BENEFIT_DDL)  # 同一
+    result = generate_ddl_alt("BENEFIT", old, new)
+    assert "CREATE TABLE BENEFIT_BK" not in result
+    assert "構造変更なし" in result
+
+
 def test_new_table_create_only():
     new = parse_ddl(BENEFIT_DDL)
     result = generate_ddl_alt("BENEFIT", None, new)

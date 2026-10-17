@@ -26,6 +26,9 @@ def generate_ddl_alt(
     if change_type == "columns_added_only":
         return _generate_modify(table_name, old_ddl, new_ddl)  # type: ignore[arg-type]
 
+    if change_type == "no_change":
+        return f"-- {table_name}: 構造変更なし（COMMENT ON などの変更のみ）。DDL ALT は不要です。"
+
     # structural_change
     return _generate_bk_copy(table_name, old_ddl, new_ddl)  # type: ignore[arg-type]
 
@@ -68,8 +71,8 @@ def _classify_change(
     if new_col_names - old_col_names:
         return "columns_added_only"
 
-    # 変更なし（テーブル定義は同一）→ WKでなければBKコピー不要だが念のため
-    return "structural_change"
+    # 変更なし（COMMENT ON のみの変更など）
+    return "no_change"
 
 
 def _generate_modify(table_name: str, old_ddl: DDLTable, new_ddl: DDLTable) -> str:
@@ -93,11 +96,27 @@ def _generate_bk_copy(table_name: str, old_ddl: DDLTable, new_ddl: DDLTable) -> 
     """構造変更に対して BKコピー方式の SQL を生成する。"""
     bk_name = f"{table_name}_BK"
     old_col_names = {c.name for c in old_ddl.columns}
-    new_col_names = {c.name for c in new_ddl.columns}
 
-    # 共通カラムを新DDLの定義順で並べる
-    common_cols = [c.name for c in new_ddl.columns if c.name in old_col_names]
-    cols_str = ", ".join(common_cols)
+    # 全挿入カラム（新DDLの定義順）と SELECT 節を構築する
+    insert_cols: list[str] = []
+    select_exprs: list[str] = []
+    for col in new_ddl.columns:
+        insert_cols.append(col.name)
+        if col.name in old_col_names:
+            select_exprs.append(col.name)
+        else:
+            # 新規追加カラム: BKには存在しないため NULL プレースホルダー
+            if col.is_not_null:
+                select_exprs.append(
+                    f"  NULL"
+                    f" -- WARNING: {col.name} is NOT NULL."
+                    " Please set an appropriate default value before executing."
+                )
+            else:
+                select_exprs.append("  NULL")
+
+    cols_str = ", ".join(insert_cols)
+    select_str = ",\n".join(select_exprs)
 
     lines: list[str] = [
         f"-- 既存データのバックアップ",
@@ -108,9 +127,9 @@ def _generate_bk_copy(table_name: str, old_ddl: DDLTable, new_ddl: DDLTable) -> 
         "",
         new_ddl.full_sql,
         "",
-        f"-- バックアップからデータ復元（共通カラムのみ）",
+        f"-- バックアップからデータ復元",
         f"INSERT INTO {table_name} ({cols_str})",
-        f"SELECT {cols_str}",
+        f"SELECT {select_str}",
         f"FROM {bk_name};",
         "",
         f"-- バックアップテーブルの削除",

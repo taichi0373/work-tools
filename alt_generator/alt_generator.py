@@ -24,9 +24,12 @@ def _process_diff_files(
     repo_path: str,
     output_base: str,
     identifier: str,
+    version: str | None = None,
+    prev_version: str | None = None,
 ) -> None:
-    """差分ファイルリストから ALT SQL ファイルを生成して出力する。"""
-    repo = Path(repo_path)
+    """差分ファイルリストから ALT SQL ファイルを生成して出力する。
+    version/prev_version が指定された場合、DML-only テーブルのDDLをgitから取得する。
+    """
     base = Path(output_base) / identifier
 
     # DDL差分を先にビルドし、旧/新のDDLTableをテーブル名ごとに記録する
@@ -44,15 +47,44 @@ def _process_diff_files(
     for df in diff_files:
         if df.sql_type == "DML":
             # DDLがdiff内にある場合は旧/新DDLを使い分ける
-            # diff内にない場合はディスク上の現在のDDLを使用（変更なしのため同一）
-            disk_ddl_path = repo / _DDL_TABLE_DIR / f"{df.table_name}.SQL"
-            if not disk_ddl_path.exists():
-                print(f"[WARNING] DDLファイルが見つかりません: {disk_ddl_path}")
-                continue
-            disk_ddl = parse_ddl(disk_ddl_path.read_text(encoding="utf-8"))
+            if df.table_name in old_ddl_map:
+                old_ddl_table = old_ddl_map.get(df.table_name)
+                new_ddl_table = new_ddl_map.get(df.table_name)
+            else:
+                # DDLが差分に含まれない（変更なし）: gitまたはディスクからDDLを取得
+                ddl_rel = str(_DDL_TABLE_DIR / f"{df.table_name}.SQL").replace("\\", "/")
+                if version and prev_version:
+                    try:
+                        import git as _git
+                        _repo = _git.Repo(repo_path)
+                        old_content = _repo.git.show(f"{prev_version}:{ddl_rel}")
+                        new_content = _repo.git.show(f"{version}:{ddl_rel}")
+                        old_ddl_table = parse_ddl(old_content)
+                        new_ddl_table = parse_ddl(new_content)
+                    except Exception as e:
+                        print(f"[WARNING] git から DDL を取得できません ({e})。ディスクを使用します。")
+                        old_ddl_table = new_ddl_table = _read_disk_ddl(repo_path, df.table_name)
+                else:
+                    old_ddl_table = new_ddl_table = _read_disk_ddl(repo_path, df.table_name)
 
-            old_ddl_table = old_ddl_map.get(df.table_name) or disk_ddl
-            new_ddl_table = new_ddl_map.get(df.table_name) or disk_ddl
+            if old_ddl_table is None or new_ddl_table is None:
+                print(f"[WARNING] {df.table_name} の DDL が取得できませんでした。スキップします。")
+                continue
+
+            old_columns = [c.name for c in old_ddl_table.columns]
+            new_columns = [c.name for c in new_ddl_table.columns]
+            pk_columns = new_ddl_table.primary_keys  # PKは新DDL基準
+
+            old_records = parse_dml(df.old_content or "", old_columns, pk_columns)
+            new_records = parse_dml(df.new_content or "", new_columns, pk_columns)
+
+            # DML比較は新DDLのカラム順で実施（共通カラムのみ）
+            all_columns = new_columns
+            # 旧レコードを新カラム構造に揃える（追加カラムはNULLで補完）
+            aligned_old: dict = {}
+            for pk_key, row in old_records.items():
+                aligned_row = {col: row.get(col, "NULL") for col in all_columns}
+                aligned_old[pk_key] = aligned_row
 
             old_columns = [c.name for c in old_ddl_table.columns]
             new_columns = [c.name for c in new_ddl_table.columns]
@@ -74,6 +106,15 @@ def _process_diff_files(
                 _write_alt(base / "DML", df.table_name, sql)
 
 
+def _read_disk_ddl(repo_path: str, table_name: str):
+    """ディスク上の DDL ファイルを読み込んで DDLTable を返す。"""
+    ddl_path = Path(repo_path) / _DDL_TABLE_DIR / f"{table_name}.SQL"
+    if not ddl_path.exists():
+        print(f"[WARNING] DDLファイルが見つかりません: {ddl_path}")
+        return None
+    return parse_ddl(ddl_path.read_text(encoding="utf-8"))
+
+
 def _write_alt(output_dir: Path, table_name: str, sql: str) -> None:
     """ALT SQLファイルを指定ディレクトリに書き出す。"""
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -93,7 +134,8 @@ def run_version(
 
     prev_version, diff_files = get_version_diff(repo_path, version)
     print(f"差分: {prev_version} → {version} ({len(diff_files)} ファイル)")
-    _process_diff_files(diff_files, repo_path, output_base, version)
+    _process_diff_files(diff_files, repo_path, output_base, version,
+                        version=version, prev_version=prev_version)
 
 
 def run_pr(
@@ -116,16 +158,6 @@ def run_pr(
 def main() -> None:
     parser = argparse.ArgumentParser(description="ALT SQL 自動生成ツール")
     parser.add_argument(
-        "--repo-path",
-        default=".",
-        help="対象リポジトリのパス (default: カレントディレクトリ)",
-    )
-    parser.add_argument(
-        "--output-base",
-        default=None,
-        help="ALTファイル出力先ベースパス (default: {repo-path}/config/database/Alt)",
-    )
-    parser.add_argument(
         "--github-repo",
         default="taichi0373/kumamoto-henno-map",
         help="GitHubリポジトリ名 (owner/repo)",
@@ -136,20 +168,23 @@ def main() -> None:
     # version サブコマンド
     version_parser = subparsers.add_parser("version", help="バージョン指定で差分生成")
     version_parser.add_argument("version", help="バージョンタグ (例: v1.1.5)")
-    version_parser.add_argument("--repo-path", default=None, help="対象リポジトリのパス")
+    version_parser.add_argument(
+        "--repo-path", default=".", help="対象リポジトリのパス (default: カレントディレクトリ)"
+    )
     version_parser.add_argument("--output-base", default=None, help="ALTファイル出力先")
 
     # pr サブコマンド
     pr_parser = subparsers.add_parser("pr", help="PR番号指定で差分生成")
     pr_parser.add_argument("pr_number", type=int, help="PR番号")
-    pr_parser.add_argument("--repo-path", default=None, help="対象リポジトリのパス")
+    pr_parser.add_argument(
+        "--repo-path", default=".", help="対象リポジトリのパス (default: カレントディレクトリ)"
+    )
     pr_parser.add_argument("--output-base", default=None, help="ALTファイル出力先")
 
     args = parser.parse_args()
 
-    # サブコマンド側の --repo-path が優先、なければグローバル値
-    repo_path = getattr(args, "repo_path", None) or args.__dict__.get("repo_path") or "."
-    output_base = getattr(args, "output_base", None)
+    repo_path = args.repo_path
+    output_base = args.output_base
 
     if args.command == "version":
         run_version(
