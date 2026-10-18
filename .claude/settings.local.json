@@ -3,19 +3,11 @@
     "allow": [
       "Bash(node:*)",
       "Bash(gh api:*)",
-      "Bash(python3:*)",
-      "Bash(jar tf:*)",
-      "Bash(xargs -I{} sh -c 'jar tf \"\"$1\"\" 2>/dev/null | grep -l WebMvcTest && echo \"\"$1\"\"' -- {})",
-      "Bash(grep spring-webmvc\\\\|MockMvc:*)",
-      "Bash(cd /c/Users/ta9ns/kumamoto-henno-map/apps/back && ./gradlew compileTestJava 2>&1)",
-      "Bash(cd:*)",
-      "Bash(cd /c/Users/ta9ns/kumamoto-henno-map && git checkout -- apps/back/gradlew.bat && git checkout -b fix/pr-259-vue-conflict origin/dependabot/npm_and_yarn/apps/front/develop/vue-3.5.35 2>&1)",
-      "Bash(cd /c/Users/ta9ns/kumamoto-henno-map && git restore apps/back/gradlew.bat && git status 2>&1)",
-      "Bash(cd /c/Users/ta9ns/kumamoto-henno-map && git checkout -f -b fix/pr-259-vue-conflict origin/dependabot/npm_and_yarn/apps/front/develop/vue-3.5.35 2>&1)",
-      "Bash(head:*)",
-      "Bash(cd /c/Users/ta9ns/kumamoto-henno-map && git push origin HEAD:dependabot/npm_and_yarn/apps/front/develop/vue-3.5.35 2>&1)",
-      "Bash(git:*)",
       "Bash(gh label:*)",
+      "Bash(python3:*)",
+      "Bash(git:*)",
+      "Bash(cd:*)",
+      "Bash(head:*)",
       "Bash(cat:*)"
     ]
   }
