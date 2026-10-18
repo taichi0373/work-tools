@@ -65,7 +65,12 @@ worktree に Claude Code 用の設定ファイルを作成し、以下を自動�
 
 ### .claude/settings.local.json を作成
 
-`{worktreePath}/.claude/settings.local.json` を作成する（ディレクトリがなければ作成）:
+まず以下のコマンドでOSのユーザー名を取得する:
+```
+powershell -Command "$env:USERNAME"
+```
+
+`{worktreePath}/.claude/settings.local.json` を作成する（ディレクトリがなければ作成）。`{username}` には上記で取得した実際のユーザー名を埋めること:
 
 ```json
 {
