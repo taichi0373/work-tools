@@ -187,10 +187,12 @@ try {
 
     # 4. 課題番号が一致する行を検索
     $targetRow = $null
-    foreach ($row in $dataRows) {
-        $cellA = Get-CellValue -Row $row -Index $COL_A
+    $targetRowNumber = $null
+    for ($i = 0; $i -lt $dataRows.Count; $i++) {
+        $cellA = Get-CellValue -Row $dataRows[$i] -Index $COL_A
         if ($cellA -eq $IssueNo) {
-            $targetRow = $row
+            $targetRow = $dataRows[$i]
+            $targetRowNumber = $i + 2  # 1行目はヘッダーのため +2
             break
         }
     }
@@ -209,6 +211,7 @@ try {
         '対応状況'    = Get-CellValue -Row $targetRow -Index $COL_N
         '対応期限'    = Get-CellValue -Row $targetRow -Index $COL_O
         'プルリク番号' = Get-CellValue -Row $targetRow -Index $COL_T
+        '行番号'      = $targetRowNumber
     }
 
     $result | ConvertTo-Json -Depth 3
