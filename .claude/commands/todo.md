@@ -1,10 +1,23 @@
 ---
 description: 課題対応ワークフロー（Google Sheets取得 → worktree作成 → ブレインストーミング）
-argument-hint: [課題番号]
+argument-hint: [課題番号] [補足説明（省略可）]
 allowed-tools: Bash, Read, Write, Edit
 ---
 
 課題番号 $ARGUMENTS の対応を開始する。以下のステップを順番に実行すること。
+
+## 引数の解析
+
+`$ARGUMENTS` を解析して以下の変数を導出する:
+
+- `{issueNo}` = `$ARGUMENTS` の最初のトークン（スペース区切りの1つ目）
+- `{supplement}` = `$ARGUMENTS` の残り部分（2つ目以降のトークン。空の場合は空文字）
+
+例:
+- `/todo 1234` → `{issueNo}=1234`, `{supplement}=（なし）`
+- `/todo 1234 バリデーション周りを重点的に調査` → `{issueNo}=1234`, `{supplement}=バリデーション周りを重点的に調査`
+
+以降のステップでは `$ARGUMENTS` の代わりに `{issueNo}` を課題番号として使用する。
 
 ## Step 0: 設定ファイルを読み込む
 
@@ -20,15 +33,15 @@ allowed-tools: Bash, Read, Write, Edit
 
 以降のステップでは取得した値を使用する。
 
-worktree のパスは `repoPath` の親ディレクトリ + `\` + リポジトリ名 + `-$ARGUMENTS` で導出する。
-（例: repoPath が `C:\work\my-repo` なら worktree は `C:\work\my-repo-$ARGUMENTS`）
+worktree のパスは `repoPath` の親ディレクトリ + `\` + リポジトリ名 + `-{issueNo}` で導出する。
+（例: repoPath が `C:\work\my-repo` なら worktree は `C:\work\my-repo-{issueNo}`）
 
 ## Step 1: Google Sheets から課題詳細を取得
 
 以下のコマンドを実行して課題情報を取得する（`{scriptPath}` は Step 0 の値に置き換える）:
 
 ```
-powershell -File "{scriptPath}" -IssueNo $ARGUMENTS
+powershell -File "{scriptPath}" -IssueNo {issueNo}
 ```
 
 出力された JSON をパースして課題情報を保持する。`行番号` フィールドも取得しておく（プルリクのスプレッドシートリンク生成に使用）。エラーが発生した場合はユーザーに報告して中断する。
@@ -49,12 +62,12 @@ git -C "{repoPath}" worktree list
 
 ワークツリーが存在しない場合は以下を実行する:
 ```
-git -C "{repoPath}" worktree add "{worktreePath}" -b "{branchPrefix}$ARGUMENTS" origin/{baseBranch}
+git -C "{repoPath}" worktree add "{worktreePath}" -b "{branchPrefix}{issueNo}" origin/{baseBranch}
 ```
 
-ブランチ `{branchPrefix}$ARGUMENTS` が既に存在する場合は `-b` を除いて実行する:
+ブランチ `{branchPrefix}{issueNo}` が既に存在する場合は `-b` を除いて実行する:
 ```
-git -C "{repoPath}" worktree add "{worktreePath}" "{branchPrefix}$ARGUMENTS"
+git -C "{repoPath}" worktree add "{worktreePath}" "{branchPrefix}{issueNo}"
 ```
 
 ワークツリーが既に存在する場合はそのまま続行し、ユーザーに通知する。
@@ -136,7 +149,7 @@ powershell -Command "$env:USERNAME"
 
 ```
 ---
-## 検証指摘No.$ARGUMENTS 対応セッション
+## 検証指摘No.{issueNo} 対応セッション
 
 ### このセッションのルール
 
@@ -149,13 +162,13 @@ powershell -Command "$env:USERNAME"
 
 | 項目     | 内容           |
 |----------|----------------|
-| 課題No   | $ARGUMENTS     |
+| 課題No   | {issueNo}      |
 | 業務     | {業務}         |
 | 画面処理 | {画面処理}     |
 | 事象詳細 | {事象詳細}     |
 | 対応者   | {対応者}       |
 | 対応期限 | {対応期限}     |
-| ブランチ | {branchPrefix}$ARGUMENTS |
+| ブランチ | {branchPrefix}{issueNo} |
 ```
 
 ## Step 3: セッション名と課題サマリーを表示
@@ -163,7 +176,7 @@ powershell -Command "$env:USERNAME"
 以下の形式で表示する（セッション名が UI に反映されるよう、H1 見出しで始める）:
 
 ```
-# 検証指摘No.$ARGUMENTS
+# 検証指摘No.{issueNo}
 
 | 項目       | 内容           |
 |------------|----------------|
@@ -176,12 +189,19 @@ powershell -Command "$env:USERNAME"
 | プルリク   | {プルリク番号} |
 
 作業ディレクトリ: {worktreePath}
-ブランチ: {branchPrefix}$ARGUMENTS
+ブランチ: {branchPrefix}{issueNo}
 ```
 
 ## Step 4: superpowers:brainstorming スキルを起動
 
 課題内容（課題No・業務・画面処理・事象詳細・対応期限）と作業ディレクトリをコンテキストとして、`superpowers:brainstorming` スキルを起動して対応方針のブレインストーミングを行う。
+
+**補足説明（ユーザー指定）:**
+`{supplement}` が空でない場合、ブレインストーミングの冒頭に以下として伝える:
+
+> ユーザーからの補足: {supplement}
+
+この補足はブレインストーミングの調査方針・着眼点として優先的に考慮すること。
 
 **調査方針（brainstorming の質問ルールを上書き）:**
 コードを調べれば答えられる質問（「どのファイルで管理しているか」「どこに実装されているか」など）は、ユーザーに聞かずに自分でコードを調査・確認してから提案すること。ユーザーへの質問は、コードを読んでも判断できない要件・仕様・優先度に関するものだけに限定する。
@@ -208,7 +228,7 @@ powershell -Command "$env:USERNAME"
 実行コマンド（`{worktreePath}` 内で実行）:
 ```
 git -C "{worktreePath}" add .
-git -C "{worktreePath}" commit -m "【検証指摘：No.$ARGUMENTS　{画面処理}　{対応内容}】"
+git -C "{worktreePath}" commit -m "【検証指摘：No.{issueNo}　{画面処理}　{対応内容}】"
 ```
 
 ## Step 6（コミット完了後）: push・プルリク作成・ワークツリー削除
@@ -222,7 +242,7 @@ git -C "{worktreePath}" commit -m "【検証指摘：No.$ARGUMENTS　{画面処�
 ### 1. push
 
 ```
-git -C "{worktreePath}" push -u origin {branchPrefix}$ARGUMENTS
+git -C "{worktreePath}" push -u origin {branchPrefix}{issueNo}
 ```
 
 ### 2. プルリク作成
@@ -233,11 +253,11 @@ git -C "{worktreePath}" push -u origin {branchPrefix}$ARGUMENTS
 gh pr create \
   --repo "{repoPath}" \
   --base {baseBranch} \
-  --head {branchPrefix}$ARGUMENTS \
-  --title "【検証指摘：No.$ARGUMENTS　{画面処理}　{対応内容}】" \
+  --head {branchPrefix}{issueNo} \
+  --title "【検証指摘：No.{issueNo}　{画面処理}　{対応内容}】" \
   --body "$(cat <<'EOF'
 ### 課題番号
-[No.$ARGUMENTS]({spreadsheetUrl}?gid=0#gid=0&range={行番号}:{行番号})
+[No.{issueNo}]({spreadsheetUrl}?gid=0#gid=0&range={行番号}:{行番号})
 
 ### 対応内容
 {対応内容}
