@@ -1,0 +1,6 @@
+{
+  "scriptPath": "C:\\path\\to\\work_tools\\issue_tracker\\read_issue.ps1",
+  "repoPath": "C:\\path\\to\\your-repo",
+  "baseBranch": "develop",
+  "branchPrefix": "feature/develop-"
+}

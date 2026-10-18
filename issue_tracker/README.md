@@ -17,7 +17,7 @@
 
 ## 前提条件
 
-- PowerShell 7.0 以上（`pwsh.exe`）
+- Windows PowerShell 5.1 以上（`powershell.exe`）
 - 自分のGoogleアカウントが対象スプレッドシートの閲覧権限を持っていること
 
 ## セットアップ
@@ -115,11 +115,26 @@ schtasks /delete /tn "IssueTracker_Weekly" /f
 - **共有進捗シートに存在し、かつN列が「対応完了」の課題は除外**（前週完了扱い）
 - 今週初めて「対応完了」になった課題は含める
 
+## `/todo` コマンドとの連携（Claude Code）
+
+`read_issue.ps1` は Claude Code の `/todo` コマンドから呼び出されます。
+`issue_tracker.ps1` と同じ `config.json` および `credentials/token.json` を共有するため、
+**`issue_tracker` のセットアップが完了していれば追加設定は不要です。**
+
+単体でのテスト実行：
+
+```powershell
+powershell -File read_issue.ps1 -IssueNo 1234
+```
+
+`/todo` コマンド全体のセットアップ手順は [../README.md](../README.md) を参照してください。
+
 ## ファイル構成
 
 ```
 issue_tracker/
-├── issue_tracker.ps1        # メインスクリプト
+├── issue_tracker.ps1        # メインスクリプト（週次転記用）
+├── read_issue.ps1           # 課題詳細取得スクリプト（/todo コマンド用）
 ├── run_issue_tracker.bat    # 手動実行用
 ├── setup_schedule.bat       # タスクスケジューラ登録用
 ├── config.json.example      # 設定テンプレート
@@ -133,5 +148,4 @@ issue_tracker/
 ## 注意事項
 
 - `config.json`、`credentials/`、`output/` は `.gitignore` により管理外
-- PowerShell 5.1（`powershell.exe`）では動作しない。`pwsh.exe`（PowerShell 7）が必要
 - スケジューラ登録前に手動実行で初回認証（`token.json` の生成）を済ませておくこと

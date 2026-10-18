@@ -22,16 +22,16 @@
     ALTファイル出力先ベースパス (デフォルト: {RepoPath}/config/database/Alt)
 
 .PARAMETER GithubRepo
-    GitHubリポジトリ名 owner/repo形式 (デフォルト: taichi0373/kumamoto-henno-map)
+    GitHubリポジトリ名 owner/repo形式 (例: owner/repo-name)
 
 .PARAMETER GithubToken
     GitHub Personal Access Token (PRモードのみ必要。.envファイルでも設定可能)
 
 .EXAMPLE
-    .\alt_generator.ps1 version v1.1.5 -RepoPath C:\Users\ta9ns\kumamoto-henno-map
+    .\alt_generator.ps1 version v1.1.5 -RepoPath C:\path\to\your-repo
 
 .EXAMPLE
-    .\alt_generator.ps1 pr 42 -RepoPath C:\Users\ta9ns\kumamoto-henno-map
+    .\alt_generator.ps1 pr 42 -RepoPath C:\path\to\your-repo
 #>
 
 [CmdletBinding()]
@@ -45,7 +45,7 @@ param(
 
     [string]$RepoPath    = ".",
     [string]$OutputBase  = "",
-    [string]$GithubRepo  = "taichi0373/kumamoto-henno-map",
+    [string]$GithubRepo  = "",
     [string]$GithubToken = ""
 )
 

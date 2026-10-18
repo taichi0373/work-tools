@@ -22,9 +22,12 @@ if (Test-Path $envFile) {
     }
 }
 
+$githubRepo  = [System.Environment]::GetEnvironmentVariable("GITHUB_REPO",  "Process")
+$defaultRepo = [System.Environment]::GetEnvironmentVariable("REPO_PATH", "Process")
+
 # --- PR番号の存在確認（open / closed / merged すべて対象）---
 function Test-PrExists {
-    param([string]$PrNumber, [string]$GithubRepo = "taichi0373/kumamoto-henno-map")
+    param([string]$PrNumber, [string]$GithubRepo)
     $token = [System.Environment]::GetEnvironmentVariable("GITHUB_TOKEN", "Process")
     if ([string]::IsNullOrEmpty($token)) { return $true }  # トークン未設定時はスキップ
     try {
@@ -69,10 +72,17 @@ while ($true) {
 
 # --- リポジトリパス入力 ---
 Write-Host ""
-$defaultRepo = "C:\Users\ta9ns\kumamoto-henno-map"
 while ($true) {
-    $repoInput = Read-Host "リポジトリのパスを入力してください (Enter でデフォルト: $defaultRepo)"
+    if ([string]::IsNullOrEmpty($defaultRepo)) {
+        $repoInput = Read-Host "リポジトリのパスを入力してください"
+    } else {
+        $repoInput = Read-Host "リポジトリのパスを入力してください (Enter でデフォルト: $defaultRepo)"
+    }
     if ([string]::IsNullOrWhiteSpace($repoInput)) {
+        if ([string]::IsNullOrEmpty($defaultRepo)) {
+            Write-Host "パスを入力してください。.env の REPO_PATH にデフォルトを設定できます。" -ForegroundColor Yellow
+            continue
+        }
         $repoPath = $defaultRepo
         break
     }
@@ -110,7 +120,7 @@ else {
             continue
         }
         Write-Host "PR #$target を確認中..." -ForegroundColor Cyan
-        if (Test-PrExists -PrNumber $target) { break }
+        if (Test-PrExists -PrNumber $target -GithubRepo $githubRepo) { break }
         Write-Host "PR #$target が見つかりません。番号を確認して再度入力してください。" -ForegroundColor Red
     }
     $command = "pr"
@@ -128,7 +138,7 @@ Write-Host ""
 
 # --- 実行 ---
 try {
-    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSScriptPath $command $target -RepoPath $repoPath
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $PSScriptPath $command $target -RepoPath $repoPath -GithubRepo $githubRepo
     Write-Host ""
     Write-Host "完了しました。" -ForegroundColor Green
 }

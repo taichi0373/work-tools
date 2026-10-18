@@ -26,21 +26,36 @@ alt_generator/output/
 
 ## セットアップ
 
-### GitHub Token の設定（PRモード使用時のみ）
+### 1. 設定ファイルの作成
 
-`.env.example` をコピーして `.env` を作成し、Personal Access Token を設定します。
+`.env.example` をコピーして `.env` を作成します。
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-`.env` を編集：
+`.env` を編集して各項目を設定します：
 
 ```
+# GitHub リポジトリ (owner/repo 形式)
+GITHUB_REPO=your-org/your-repo
+
+# 対象リポジトリのローカルパス（起動時にEnterで確定するデフォルト値）
+REPO_PATH=C:\path\to\your-repo
+
+# GitHub Personal Access Token (PRモード使用時のみ必要)
 GITHUB_TOKEN=ghp_xxxxxxxxxxxxxxxxxx
 ```
 
-### 実行ポリシーの確認
+| 項目 | 必須 | 説明 |
+|------|------|------|
+| `GITHUB_REPO` | PRモード時 | GitHub の `owner/repo` 形式のリポジトリ名 |
+| `REPO_PATH` | 任意 | ローカルリポジトリのパス。未設定時は起動ごとに入力が必要 |
+| `GITHUB_TOKEN` | PRモード時 | GitHub Personal Access Token（`repo` スコープ） |
+
+> `GITHUB_TOKEN` の取得: GitHub → Settings → Developer settings → Personal access tokens
+
+### 2. 実行ポリシーの確認
 
 初回実行時、PowerShell の実行ポリシーが制限されている場合は以下を実行してください。
 
@@ -81,27 +96,24 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 **4. リポジトリのパスを入力**
 
+`.env` に `REPO_PATH` を設定している場合は Enter のみで確定できます。
+
 ```
-リポジトリのパスを入力してください (Enter でデフォルト: C:\Users\ta9ns\kumamoto-henno-map):
+リポジトリのパスを入力してください (Enter でデフォルト: C:\path\to\your-repo):
 ```
 
-Enter のみで既定パスを使用します。
+未設定の場合はパスの入力が必須になります。
 
 **5. 実行結果の確認**
 
 ```
 差分: v1.1.4 → v1.1.5 (2 ファイル)
-生成: C:\Users\ta9ns\work_tools\alt_generator\output\v1.1.5\DDL\Alt_BENEFIT.SQL
+生成: ...\alt_generator\output\v1.1.5\DDL\Alt_BENEFIT.SQL
 完了しました。
 ```
 
 ---
 
-## 生成SQLの仕様
-
-詳細は設計書 `docs/superpowers/specs/2026-10-17-alt-sql-generator-design.md` を参照してください。
-
----
 
 ## 注意事項
 
