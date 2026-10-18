@@ -3,3 +3,4 @@ docs/superpowers/
 issue_tracker/config.json
 issue_tracker/credentials/
 issue_tracker/output/
+.claude/settings.local.json
